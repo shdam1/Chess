@@ -365,7 +365,186 @@ class Game:
             self.current_player = 'white' if self.current_player == 'black' else 'black'
             self.move_count -= 1
             print(f"Откат хода: {start} -> {end}")
+class CheckersPiece(Piece):
+  def __init__(self, color):
+    super().__init__(color, '●' if color == 'white' else '○')
+    self.is_king = False  # Для дамок
+
+  def valid_moves(self, board, position):
+    moves = []
+    x, y = position
+    direction = -1 if self.color == 'white' else 1  # Направление движения
+
+    # Обычные шашки
+    if not self.is_king:
+      # Ходы вперед
+      for dy in [-1, 1]:
+        target = (x + direction, y + dy)
+        if board.is_within_bounds(target) and board.is_empty(target):
+          moves.append(target)
+
+      # Взятия
+      for dy in [-2, 2]:
+        target = (x + 2 * direction, y + dy)
+        mid = (x + direction, y + dy // 2)
+        if board.is_within_bounds(target) and board.is_empty(target) and \
+                board.is_opponent(mid, self.color):
+          moves.append(target)
+
+        # Дамки (ходят в любом направлении)
+        else:
+          for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
+            for i in range(1, 8):
+              target = (x + dx * i, y + dy * i)
+              if not board.is_within_bounds(target):
+                break
+              if board.is_empty(target):
+                moves.append(target)
+              else:
+                if board.is_opponent(target, self.color):
+                  next_cell = (x + dx * (i + 1), y + dy * (i + 1))
+                if board.is_within_bounds(next_cell) and board.is_empty(next_cell):
+                  moves.append(next_cell)
+                  break
+
+          return moves
+
+
+class CheckersBoard(Board):
+  def setup_board(self):
+    # Расстановка шашек
+    for x in range(8):
+      for y in range(8):
+        if (x + y) % 2 == 1:  # Только на черных клетках
+          if x < 3:
+            self.board[x][y] = CheckersPiece('black')
+          elif x > 4:
+            self.board[x][y] = CheckersPiece('white')
+
+  def move_piece(self, start, end):
+    x1, y1 = start
+    x2, y2 = end
+    piece = self.board[x1][y1]
+
+    # Перемещение фигуры
+    self.board[x2][y2] = piece
+    self.board[x1][y1] = None
+
+    # Проверка на превращение в дамку
+    if isinstance(piece, CheckersPiece) and not piece.is_king:
+      if (piece.color == 'white' and x2 == 0) or (piece.color == 'black' and x2 == 7):
+        piece.is_king = True
+        piece.symbol = '♔' if piece.color == 'white' else '♚'
+
+    # Удаление взятых шашек
+    if abs(x2 - x1) > 1:  # Если был прыжок
+      dx = (x2 - x1) // abs(x2 - x1)
+      dy = (y2 - y1) // abs(y2 - y1)
+      x, y = x1 + dx, y1 + dy
+      while (x, y) != (x2, y2):
+        if self.board[x][y] is not None:
+          self.board[x][y] = None
+          break
+        x += dx
+        y += dy
+
+
+class CheckersGame:
+    def __init__(self):
+        self.board = CheckersBoard()
+        self.current_player = 'white'
+        self.move_count = 0
+
+    def play(self):
+        while True:
+            self.board.display()
+            print(f"Ход игрока {self.current_player}")
+            move = input("Введите ход (например, a3 b4): ")
+            if self.make_move(move):
+                self.move_count += 1
+                self.current_player = 'black' if self.current_player == 'white' else 'white'
+            else:
+                print("Некорректный ход. Попробуйте снова.")
+
+    def make_move(self, move):
+        try:
+            start, end = move.split()
+            start = self.parse_position(start)
+            end = self.parse_position(end)
+            piece = self.board.get_piece(start)
+
+            if piece and piece.color == self.current_player and end in piece.valid_moves(self.board, start):
+                self.board.move_piece(start, end)
+                return True
+            return False
+        except:
+            return False
+
+    def parse_position(self, pos):
+        x = 8 - int(pos[1])
+        y = ord(pos[0].lower()) - ord('a')
+        return (x, y)
+
+
+class CheckersPiece(Piece):
+    def __init__(self, color):
+        super().__init__(color, 'w' if color == 'white' else 'b')
+        self.is_king = False
+
+    def valid_moves(self, board, position):
+        moves = []
+        x, y = position
+        direction = -1 if self.color == 'white' else 1
+
+        if not self.is_king:
+            # Обычные ходы
+            for dy in [-1, 1]:
+                target = (x + direction, y + dy)
+                if board.is_within_bounds(target) and board.is_empty(target):
+                    moves.append(target)
+
+            # Ходы со взятием
+            for dy in [-2, 2]:
+                target = (x + 2 * direction, y + dy)
+                mid = (x + direction, y + dy // 2)
+                if (board.is_within_bounds(target) and board.is_empty(target) and
+                        board.is_within_bounds(mid) and board.is_opponent(mid, self.color)):
+                    moves.append(target)
+        else:
+            # Ходы для дамки
+            for dx, dy in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
+                for i in range(1, 8):
+                    target = (x + dx * i, y + dy * i)
+                    if not board.is_within_bounds(target):
+                        break
+                    if board.is_empty(target):
+                        moves.append(target)
+                    else:
+                        if board.is_opponent(target, self.color):
+                            next_cell = (x + dx * (i + 1), y + dy * (i + 1))
+                            if board.is_within_bounds(next_cell) and board.is_empty(next_cell):
+                                moves.append(next_cell)
+                        break
+        return moves
+
+def main():
+  print("Выберите игру:")
+  print("1 - Шахматы")
+  print("2 - Шашки")
+
+  while True:
+    choice = input("Введите номер игры (1 или 2): ")
+    if choice == '1':
+        game = Game()
+        game.play()
+        break
+    elif choice == '2':
+        game = CheckersGame()
+        game.play()
+        break
+    else:
+      print("Некорректный ввод. Попробуйте снова.")
+
 
 if __name__ == "__main__":
-    game = Game()
-    game.play()
+  main()
